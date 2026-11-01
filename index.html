@@ -11,8 +11,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0a1a33;--bg2:#10284d;--cream:#fbf6e9;--ink:#1b1b22;--gold:#f2b632;--gold2:#c98a0c;--muted:#6f6a5c;--red:#e03e47;--green:#22a35a;--sea:#1aa3c7}
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
-input{-webkit-user-select:text;user-select:text}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+button,.board,.cell,.tok,.dicebox,.pchip,.tabs,.hero,.topbar{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+input,select,textarea{-webkit-user-select:text!important;user-select:text!important;font-size:16px}
 html,body{margin:0;color:var(--ink);font-family:'Cairo',system-ui,sans-serif;background:var(--bg)}
 body{min-height:100vh;background:radial-gradient(1200px 600px at 50% -10%,#1d4f8a 0%,transparent 60%),radial-gradient(800px 500px at 100% 110%,#0f5d63 0%,transparent 60%),linear-gradient(180deg,#0a1a33,#071226);background-attachment:fixed}
 button{font-family:inherit;cursor:pointer;border:0;border-radius:14px;padding:11px 14px;font-size:15px;font-weight:800;color:#3a2600;background:linear-gradient(180deg,#ffd76a,#f2b632 55%,#d9970f);box-shadow:0 4px 0 #a86f05,0 6px 14px rgba(0,0,0,.25);transition:transform .08s,box-shadow .08s,opacity .2s;position:relative}
@@ -849,7 +850,7 @@ function lpSel(i,b){const o=[[0,'👤 لاعب'],[1,'🤖 سهل'],[2,'🤖 مت
 function setLP(i,b){const p=localPlayers[i];const wasBot=p.b>0;p.b=b;if(b>0&&!wasBot)p.n=BOTNAMES[i%BOTNAMES.length];if(b===0&&wasBot)p.n='لاعب '+(i+1);go('local')}
 function addLP(bot){const i=localPlayers.length;localPlayers.push(bot?{n:BOTNAMES[i%BOTNAMES.length],b:bot}:{n:'لاعب '+(i+1),b:0});go('local')}
 function vsComputer(){localPlayers=[{n:myName||'أحمد',b:0},{n:BOTNAMES[1],b:2},{n:BOTNAMES[2],b:2}];go('local')}
-function localHTML(){return `<div class="wrap"><div class="card"><h2>👥 اللاعبون</h2><div class="col" id="names">${localPlayers.map((p,i)=>`<div class="row"><span style="flex:0 0 26px;font-size:22px">${p.b?'🤖':TOK[i]}</span><input value="${esc(p.n)}" oninput="localPlayers[${i}].n=this.value" maxlength="14">${lpSel(i,p.b)}${localPlayers.length>2?`<button class="sec sm" style="flex:0 0 auto" onclick="localPlayers.splice(${i},1);go('local')">✕</button>`:''}</div>`).join('')}</div>
+function localHTML(){return `<div class="wrap"><div class="card"><h2>👥 اللاعبون</h2><div class="col" id="names">${localPlayers.map((p,i)=>`<div class="row"><span style="flex:0 0 26px;font-size:22px">${p.b?'🤖':TOK[i]}</span><input type="text" value="${esc(p.n)}" placeholder="اكتب الاسم" oninput="localPlayers[${i}].n=this.value" onfocus="this.select()" maxlength="14" autocomplete="off">${lpSel(i,p.b)}${localPlayers.length>2?`<button class="sec sm" style="flex:0 0 auto" onclick="localPlayers.splice(${i},1);go('local')">✕</button>`:''}</div>`).join('')}</div>
   ${localPlayers.length<8?`<div class="row" style="margin-top:10px"><button class="sec sm" onclick="addLP(0)">👤 + لاعب</button><button class="sec sm" onclick="addLP(2)">🤖 + كمبيوتر</button></div>`:''}
   <p class="muted" style="margin:10px 0 0">🟢 سهل: يشتري بعشوائية ونادراً يبني · 🟡 متوسط: يشتري بعقل ويبني ويقيّم الصفقات · 🔴 صعب: يخطط للاحتكار، يزايد بذكاء، يبني على 3 منازل، ويعرض عليك صفقات</p></div>
   <div class="card"><h2>⚙️ القوانين</h2>${settingsForm(draftSettings,true,true)}</div>
@@ -925,7 +926,7 @@ function peersChanged(cid){peers=Object.values(presMap);if(view==='lobby'){keepD
 async function leaveNet(){if(MQ&&CODE){try{MQ.publish(TP+CODE+'/pres/'+myCid,'',{qos:1,retain:true})}catch(e){}await sleep(150);try{MQ.end()}catch(e){}}MQ=null;clearInterval(hbTimer);presMap={};myPres=null}
 function onlineHTML(){const jc=pendingJoin;return `<div class="wrap"><div class="hero" style="padding:16px 0 0"><div class="lg" style="font-size:44px">مُلّاك</div><div class="city">🌐 اللعب مع الأصدقاء</div></div><div class="card col">
   ${jc?`<h2>🎟️ دعوة للعب</h2><p class="muted">تمت دعوتك لغرفة <b style="direction:ltr">${esc(jc)}</b> — اكتب اسمك وادخل.</p>`:'<h2>🌐 غرفة أونلاين</h2>'}
-  <label>اسمك</label><input id="myname" value="${esc(myName)}" maxlength="14" placeholder="اكتب اسمك">
+  <label>اسمك</label><input id="myname" type="text" autocomplete="off" value="${esc(myName)}" maxlength="14" placeholder="اكتب اسمك">
   ${jc?`<button class="grn" style="font-size:18px;padding:15px" onclick="joinRoom('${esc(jc)}')">🎲 ادخل اللعبة</button>`:
   `<button style="font-size:17px;padding:15px" onclick="createRoom()">✨ إنشاء غرفة وإرسال رابط</button>
   <details><summary class="muted">عندي رمز غرفة</summary><div class="row" style="margin-top:8px"><input id="jcode" placeholder="الرمز" style="direction:ltr;text-transform:lowercase" maxlength="8"><button class="grn" style="flex:0 0 auto" onclick="joinRoom()">انضمام</button></div></details>`}
