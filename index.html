@@ -341,7 +341,7 @@ function newGame(list,settings){
   const lines=order.map(o=>`${o.p.name} (${o.a+o.b})`);
   order.sort((x,y)=>(y.a+y.b)-(x.a+x.b)||y.t-x.t);
   const st={...OFFICIAL,...settings};
-  const s={settings:st,players:order.map((o,i)=>({name:o.p.name,cid:o.p.cid||null,tok:TOK[i],col:PCOL[i],cash:st.startCash,pos:0,jail:false,jt:0,cards:[],out:false})),
+  const s={settings:st,players:order.map((o,i)=>({name:o.p.name,bot:o.p.bot||0,cid:o.p.cid||null,tok:TOK[i],col:PCOL[i],cash:st.startCash,pos:0,jail:false,jt:0,cards:[],out:false})),
     props:{},bh:32,bt:12,decks:{ch:shuffle(range(16)),cc:shuffle(range(16))},cur:0,dc:0,dice:null,stage:'pre',extra:false,buy:null,auc:null,aq:[],debts:[],intq:[],trade:null,
     pot:st.fp==='seed'?st.fpSeed:0,log:[],winner:null,final:null,seq:0,card:null,cseq:0};
   OWNABLES.forEach(i=>s.props[i]={o:-1,h:0,m:false});
@@ -424,7 +424,7 @@ function aucEnd(s){const a=s.auc;s.auc=null;
   if(a.ld>=0){fx(s,{k:'buy',p:a.ld,pos:a.pos});s.players[a.ld].cash-=a.hi;s.props[a.pos].o=a.ld;log(s,`🔨 ${s.players[a.ld].name} فاز بـ${SP[a.pos].n} بمبلغ ${fmt(a.hi)}`)}
   else log(s,`لم يزايد أحد — ${SP[a.pos].n} يبقى مع البنك`);
 }
-function nextTurn(s){fx(s,{k:'turn',p:-1});const n=s.players.length;let c=s.cur;for(let k=1;k<=n;k++){const i=(s.cur+k)%n;if(!s.players[i].out){c=i;break}}
+function nextTurn(s){fx(s,{k:'turn',p:-1});s.turn=(s.turn||0)+1;const n=s.players.length;let c=s.cur;for(let k=1;k<=n;k++){const i=(s.cur+k)%n;if(!s.players[i].out){c=i;break}}
   s.cur=c;s.dc=0;s.extra=false;s.stage='pre';s.dice=null;s.buy=null;log(s,`— دور ${s.players[c].name} —`)}
 function doBankrupt(s,p,to){
   const pl=s.players[p];
@@ -710,6 +710,86 @@ const CITY=`<svg class="city" viewBox="0 0 200 110" preserveAspectRatio="xMidYMa
 <g><rect x="140" y="64" width="2" height="23" fill="#7a5230"/><path d="M141 64 q-10 -2 -14 6 M141 64 q10 -3 14 5 M141 64 q-4 -8 -12 -7 M141 64 q5 -8 13 -6" stroke="#2f9e44" stroke-width="3" fill="none" stroke-linecap="round"/>
 <rect x="186" y="68" width="2" height="19" fill="#7a5230"/><path d="M187 68 q-9 -2 -12 5 M187 68 q9 -2 12 5 M187 68 q-3 -7 -10 -6" stroke="#2f9e44" stroke-width="3" fill="none" stroke-linecap="round"/></g>
 </svg>`;
+/* ================= لاعبو الكمبيوتر (3 مستويات) ================= */
+const BOTNAMES=['أبو سعد','نورة','فهد','ريم','سلطان','غادة','بندر','لمى'];
+const LVL={1:{n:'سهل',ic:'🟢'},2:{n:'متوسط',ic:'🟡'},3:{n:'صعب',ic:'🔴'}};
+const botMem={tried:{}};
+const clone=o=>JSON.parse(JSON.stringify(o));
+function canDo(s,a){try{return apply(clone(s),a)===null}catch(e){return false}}
+function others(s,p){return range(s.players.length).filter(i=>i!==p&&!s.players[i].out)}
+function maxThreat(s,p){let m=0;OWNABLES.forEach(i=>{const pr=s.props[i];if(pr.o<0||pr.o===p||pr.m)return;const r=SP[i].t==='ut'?(UT.filter(j=>s.props[j].o===pr.o).length===2?70:28):rent(s,i,7);if(r>m)m=r});return m}
+function reserve(s,p,L){if(L===1)return 60;if(L===2)return 150;return Math.min(650,Math.max(120,Math.round(maxThreat(s,p)*0.7)))}
+/* قيمة العقار لهذا اللاعب */
+function pval(s,p,i,L){const sp=SP[i];let v=sp.p;
+  if(sp.t==='st'){const g=GRP[sp.g];const mine=g.filter(j=>j!==i&&s.props[j].o===p).length;const opp=g.filter(j=>j!==i&&s.props[j].o>=0&&s.props[j].o!==p);
+    if(mine===g.length-1)v*=L===3?2.4:1.8;else if(mine>0)v*=1.25;
+    if(opp.length===g.length-1&&new Set(opp.map(j=>s.props[j].o)).size===1)v*=L===3?1.7:1.3;
+    if(L===3&&['orange','red'].includes(sp.g))v*=1.15}
+  else if(sp.t==='rr'){const n=RR.filter(j=>j!==i&&s.props[j].o===p).length;v*=1+0.3*n}
+  else{if(UT.some(j=>j!==i&&s.props[j].o===p))v*=1.3;else v*=0.85}
+  if(s.props[i].m)v-=unmCost(s,i)*0.6;return v}
+function givesMonopoly(s,to,props){return props.some(i=>{const sp=SP[i];if(sp.t!=='st')return false;return GRP[sp.g].every(j=>j===i||s.props[j].o===to)})}
+function evalTrade(s,t,L){const B=t.to,A=t.from;
+  const get=t.gp.reduce((a,i)=>a+pval(s,B,i,L),0)+t.gc+t.gk.length*50-t.gp.filter(i=>s.props[i].m).reduce((a,i)=>a+intCost(s,i),0);
+  let give=t.rp.reduce((a,i)=>a+pval(s,B,i,L)*(s.props[i].m?.8:1.05),0)+t.rc+t.rk.length*50;
+  if(givesMonopoly(s,A,t.rp))give+=t.rp.reduce((a,i)=>a+SP[i].p,0)*(L===3?2.2:L===2?1.4:.5);
+  if(t.rc>s.players[B].cash-(L===1?0:80))give+=9999;
+  const need=L===1?.85:L===2?1.05:1.2;if(L===1&&Math.random()<.15)return true;
+  return get>=give*need&&get>0}
+function bestBuild(s,p,L){const res=reserve(s,p,L);const cands=[];
+  Object.keys(GRP).forEach(g=>{if(!ownsGroup(s,p,g)||GRP[g].some(j=>s.props[j].m))return;
+    GRP[g].forEach(i=>{const pr=s.props[i];if(pr.h>=5)return;if(s.players[p].cash-hcost(i)<res)return;
+      if(L===3){const minAll=Math.min(...Object.keys(GRP).filter(x=>ownsGroup(s,p,x)).flatMap(x=>GRP[x].map(j=>s.props[j].h)));if(pr.h>=3&&minAll<3)return}
+      if(L===1&&pr.h>=2)return;
+      if(canDo(s,{type:'build',pos:i,by:p}))cands.push([i,(SP[i].r[Math.min(5,pr.h+1)]-SP[i].r[pr.h])/hcost(i)])})});
+  cands.sort((a,b)=>b[1]-a[1]);return cands.length?cands[0][0]:-1}
+function bestUnmortgage(s,p,L){if(L===1)return -1;const res=reserve(s,p,L);
+  const m=OWNABLES.filter(i=>s.props[i].o===p&&s.props[i].m&&s.players[p].cash-unmCost(s,i)>res*1.5);
+  m.sort((a,b)=>pval(s,p,b,L)-pval(s,p,a,L));return m.length?m[0]:-1}
+function raiseCash(s,p,L){/* بيع مبانٍ أولاً من المجموعة الأقل قيمة، ثم رهن الأقل قيمة */
+  const sells=OWNABLES.filter(i=>s.props[i].o===p&&s.props[i].h>0&&canDo(s,{type:'sell',pos:i,by:p}));
+  if(sells.length){sells.sort((a,b)=>SP[a].p-SP[b].p);return {type:'sell',pos:sells[0]}}
+  const mor=OWNABLES.filter(i=>s.props[i].o===p&&!s.props[i].m&&canDo(s,{type:'mortgage',pos:i,by:p}));
+  if(mor.length){mor.sort((a,b)=>pval(s,p,a,L)-pval(s,p,b,L));return {type:'mortgage',pos:mor[0]}}
+  return null}
+function proposeTrade(s,p,L){if(L===1||s.trade||s.auc)return null;const key=s.turn||0;if(botMem.tried['t'+p]===key)return null;botMem.tried['t'+p]=key;
+  if(Math.random()>(L===3?.6:.35))return null;
+  for(const g of Object.keys(GRP)){const grp=GRP[g];const mine=grp.filter(j=>s.props[j].o===p);if(mine.length!==grp.length-1)continue;
+    const miss=grp.find(j=>s.props[j].o!==p);const ow=s.props[miss].o;if(ow<0||s.players[ow].out||!tradeable(s,miss)||groupHasBuildings(s,g))continue;
+    const k=p+'-'+miss;if(botMem.tried[k]&&key-botMem.tried[k]<8)continue;botMem.tried[k]=key;
+    const offer=Math.round(SP[miss].p*(L===3?1.7:1.35)/10)*10;if(s.players[p].cash-offer<reserve(s,p,L)*0.6)continue;
+    return {type:'tradePropose',t:{to:ow,gc:offer,rc:0,gp:[],rp:[miss],gk:[],rk:[],pub:L===3}}}
+  return null}
+function botDecide(s,p){const L=s.players[p].bot||2,ph=phase(s),pl=s.players[p];
+  if(ph==='trade')return {type:evalTrade(s,s.trade,L)?'tradeAccept':'tradeReject'};
+  if(ph==='int'){const q=s.intq[0];return {type:pl.cash-unmCost(s,q.pos)>reserve(s,p,L)?'intUnm':'intKeep'}}
+  if(ph==='debt'){const d=s.debts[0];if(pl.cash>=d.amt)return {type:'payDebt'};return raiseCash(s,p,L)||{type:'bankrupt'}}
+  if(ph==='auc'){const a=s.auc;let max=L===1?SP[a.pos].p*(.5+Math.random()*.4):pval(s,p,a.pos,L)*(L===3?1:.9);
+    max=Math.min(max,pl.cash-(L===3?reserve(s,p,L)*.5:40));const step=a.hi<50?10:a.hi<200?20:25;const bid=Math.max(a.hi+step,s.settings.aucMin);
+    return bid<=max?{type:'bid',amt:bid}:{type:'pass'}}
+  if(ph==='buy'){const i=s.buy,price=SP[i].p;const v=pval(s,p,i,L);const res=reserve(s,p,L);
+    if(pl.cash<price)return {type:'decline'};
+    if(L===1)return {type:(pl.cash-price>40&&Math.random()<.8)?'buy':'decline'};
+    return {type:(pl.cash-price>=res*(v>price*1.5?.3:1)||v>price*1.7)?'buy':'decline'}}
+  if(ph==='pre'||ph==='post'){
+    const b=bestBuild(s,p,L);if(b>=0)return {type:'build',pos:b};
+    const u=bestUnmortgage(s,p,L);if(u>=0)return {type:'unmortgage',pos:u};
+    if(ph==='post')return {type:'endTurn'};
+    const tr=proposeTrade(s,p,L);if(tr)return tr;
+    if(pl.jail){const unowned=OWNABLES.filter(i=>s.props[i].o<0).length;
+      const wantOut=L===1?Math.random()<.4:L===2?unowned>4:unowned>8;
+      if(wantOut&&pl.cards.length)return {type:'useCard'};
+      if(wantOut&&pl.cash-s.settings.jailFine>reserve(s,p,L))return {type:'payJail'}}
+    return {type:'roll'}}
+  return null}
+/* المحرّك: يشتغل على جهاز اللعب المحلي أو المضيف فقط */
+let botTimer=null;
+function scheduleBot(){clearTimeout(botTimer);if(!S||S.winner!==null||(MODE!=='local'&&MODE!=='host'))return;
+  const ph=phase(S);const A=actor(S);if(A<0||!S.players[A]||!S.players[A].bot)return;
+  botTimer=setTimeout(()=>{if(animating||!S||actor(S)!==A||phase(S)!==ph)return scheduleBot();
+    let a=botDecide(S,A);if(!a)return;a={...a,by:A};let e=apply(S,a);
+    if(e){/* احتياط: أي إجراء مرفوض يتحول لإجراء آمن */const fb={pre:'roll',post:'endTurn',auc:'pass',buy:'decline',trade:'tradeReject',int:'intKeep',debt:'bankrupt'}[ph];e=fb?apply(S,{type:fb,by:A}):e}
+    if(!e)afterChange()},ph==='auc'?700:ph==='trade'?1800:900)}
 /* ================= الواجهة ================= */
 let S=null,MODE=null,mySeat=-1,view='home',ROOMP=null,GR=null,CODE=null,peers=[],lastCseq=0,modalKind=null,manageFor=null,lastSt=0,hostSess=null,bgen=0;
 const $=id=>document.getElementById(id);
@@ -735,7 +815,7 @@ function act(type,extra={},by){
   afterChange();
 }
 function afterChange(){if(MODE==='local')store.set('mullak_local',S);if(MODE==='host'){store.set('mullak_host',{S,CODE});broadcast()}onState()}
-function canAct(p){if(!S||p<0)return false;return MODE==='local'||mySeat===p}
+function canAct(p){if(!S||p<0||!S.players[p])return false;return (MODE==='local'||mySeat===p)&&!S.players[p].bot}
 
 /* ---------- الشاشة الرئيسية ---------- */
 function go(v){keepDraft();view=v;render()}
@@ -752,6 +832,7 @@ function homeHTML(){const L=store.get('mullak_local'),Ho=store.get('mullak_host'
    ${L&&L.winner===null?`<button class="grn" onclick="resumeLocal()">▶️ استئناف اللعبة على هذا الجوال</button>`:''}
    ${Ho&&Ho.S&&Ho.S.winner===null?`<button class="grn" onclick="resumeHost()">▶️ استئناف غرفتك الأونلاين (${esc(Ho.CODE)})</button>`:''}
    <button onclick="go('local')" style="font-size:17px;padding:15px">📱 لعب على جوال واحد</button>
+   <button class="grn" onclick="vsComputer()" style="font-size:16px;padding:14px">🤖 العب ضد الكمبيوتر</button>
    <button class="sec" onclick="go('online')" style="font-size:16px;padding:14px">🌐 العب أونلاين — أرسل رابط لأصدقائك</button>
    <div class="row"><button class="sec sm" onclick="showRules()">📘 القوانين</button><button class="sec sm" onclick="toggleSound();go('home')">${SND.on?'🔊 الصوت يعمل':'🔇 الصوت مغلق'}</button></div>
   </div>
@@ -763,16 +844,21 @@ function toggleMusic(){setMusic(!SND.music);const b=$('musb');if(b)b.textContent
 function resumeLocal(){S=store.get('mullak_local');if(!S.fx)S.fx=[];MODE='local';mySeat=-1;go('game')}
 
 /* ---------- إعداد اللعب المحلي ---------- */
-let localNames=store.get('mullak_names')||['أحمد','لاعب 2'];
-function localHTML(){return `<div class="wrap"><div class="card"><h2>📱 اللاعبون</h2><div class="col" id="names">${localNames.map((n,i)=>`<div class="row"><span style="flex:0 0 28px;font-size:22px">${TOK[i]}</span><input value="${esc(n)}" oninput="localNames[${i}]=this.value" maxlength="14">${localNames.length>2?`<button class="sec sm" style="flex:0 0 auto" onclick="localNames.splice(${i},1);go('local')">✕</button>`:''}</div>`).join('')}</div>
-  ${localNames.length<8?`<button class="sec sm" style="margin-top:10px" onclick="localNames.push('لاعب '+(localNames.length+1));go('local')">+ إضافة لاعب</button>`:''}</div>
+let localPlayers=store.get('mullak_players')||[{n:'أحمد',b:0},{n:'لاعب 2',b:0}];
+function lpSel(i,b){const o=[[0,'👤 لاعب'],[1,'🤖 سهل'],[2,'🤖 متوسط'],[3,'🤖 صعب']];return `<select style="flex:0 0 112px;width:112px" onchange="setLP(${i},+this.value)">${o.map(([v,t])=>`<option value="${v}" ${v===b?'selected':''}>${t}</option>`).join('')}</select>`}
+function setLP(i,b){const p=localPlayers[i];const wasBot=p.b>0;p.b=b;if(b>0&&!wasBot)p.n=BOTNAMES[i%BOTNAMES.length];if(b===0&&wasBot)p.n='لاعب '+(i+1);go('local')}
+function addLP(bot){const i=localPlayers.length;localPlayers.push(bot?{n:BOTNAMES[i%BOTNAMES.length],b:bot}:{n:'لاعب '+(i+1),b:0});go('local')}
+function vsComputer(){localPlayers=[{n:myName||'أحمد',b:0},{n:BOTNAMES[1],b:2},{n:BOTNAMES[2],b:2}];go('local')}
+function localHTML(){return `<div class="wrap"><div class="card"><h2>👥 اللاعبون</h2><div class="col" id="names">${localPlayers.map((p,i)=>`<div class="row"><span style="flex:0 0 26px;font-size:22px">${p.b?'🤖':TOK[i]}</span><input value="${esc(p.n)}" oninput="localPlayers[${i}].n=this.value" maxlength="14">${lpSel(i,p.b)}${localPlayers.length>2?`<button class="sec sm" style="flex:0 0 auto" onclick="localPlayers.splice(${i},1);go('local')">✕</button>`:''}</div>`).join('')}</div>
+  ${localPlayers.length<8?`<div class="row" style="margin-top:10px"><button class="sec sm" onclick="addLP(0)">👤 + لاعب</button><button class="sec sm" onclick="addLP(2)">🤖 + كمبيوتر</button></div>`:''}
+  <p class="muted" style="margin:10px 0 0">🟢 سهل: يشتري بعشوائية ونادراً يبني · 🟡 متوسط: يشتري بعقل ويبني ويقيّم الصفقات · 🔴 صعب: يخطط للاحتكار، يزايد بذكاء، يبني على 3 منازل، ويعرض عليك صفقات</p></div>
   <div class="card"><h2>⚙️ القوانين</h2>${settingsForm(draftSettings,true,true)}</div>
   <div class="row" style="margin-bottom:30px"><button class="sec" onclick="go('home')">رجوع</button><button class="grn" onclick="startLocal()">ابدأ اللعب</button></div></div>`}
-function startLocal(){const names=localNames.map(n=>n.trim()).filter(Boolean);if(names.length<2)return toast('تحتاج لاعبين على الأقل');
-  draftSettings=readSettings(draftSettings,true);store.set('mullak_settings',draftSettings);store.set('mullak_names',names);
-  S=newGame(names.map(n=>({name:n})),draftSettings);MODE='local';mySeat=-1;lastCseq=0;store.set('mullak_local',S);go('game')}
+function startLocal(){const ps=localPlayers.map(p=>({name:(p.n||'').trim(),bot:p.b})).filter(p=>p.name);if(ps.length<2)return toast('تحتاج لاعبين على الأقل');
+  if(!ps.some(p=>!p.bot))return toast('لازم لاعب واحد على الأقل يكون إنسان');
+  draftSettings=readSettings(draftSettings,true);store.set('mullak_settings',draftSettings);store.set('mullak_players',localPlayers);
+  S=newGame(ps,draftSettings);MODE='local';mySeat=-1;lastCseq=0;botMem.tried={};store.set('mullak_local',S);go('game')}
 
-/* ---------- نموذج القوانين ---------- */
 function settingsForm(st,editable,setup){const d=editable?'':'disabled';
   const num=(k,l,h)=>`<label>${l}${h?`<small>${h}</small>`:''}</label><input type="number" id="s_${k}" value="${st[k]}" ${d} min="0">`;
   const chk=(k,l,h)=>`<label for="s_${k}">${l}${h?`<small>${h}</small>`:''}</label><input type="checkbox" id="s_${k}" ${st[k]?'checked':''} ${d}>`;
@@ -862,13 +948,16 @@ function lobbyHTML(){const ps=namedPeers();const host=MODE==='host';const canSha
   <div class="row"><a href="https://wa.me/?text=${encodeURIComponent(shareMsg())}" target="_blank" rel="noopener" style="flex:1;text-decoration:none"><button class="grn" style="width:100%">واتساب</button></a>
   <button onclick="copyLink()">📋 نسخ</button>${canShare?'<button class="sec" onclick="nativeShare()">📤 مشاركة</button>':''}</div>
   <h3>المتصلون (${ps.length}/8)</h3>${ps.map(p=>`<div class="prow"><span style="font-size:20px">🟢</span><span class="t"><b>${esc(p.presence.name)}</b> ${p.presence.host?'<span class="pill">المضيف 👑</span>':''} ${p.presence.cid===myCid?'<span class="pill">أنت</span>':''}</span></div>`).join('')||'<p class="muted">جاري الاتصال…</p>'}
-  ${host?(ps.length<2?'<p class="muted">⏳ بانتظار انضمام أصدقائك…</p>':''):'<p class="muted">⏳ بانتظار أن يبدأ المضيف اللعبة…</p>'}</div>
-  ${host?`<div class="card"><h2>⚙️ القوانين</h2>${settingsForm(draftSettings,true,true)}</div><button class="grn" style="width:100%;margin-bottom:12px;font-size:18px;padding:15px" onclick="startHost()" ${ps.length<2?'disabled':''}>🚀 ابدأ اللعبة (${ps.length} لاعبين)</button>`:''}
+  ${hostBots.map((b,k)=>`<div class="prow"><span style="font-size:20px">🤖</span><span class="t"><b>${esc(b.name)}</b> <span class="pill">${LVL[b.bot].ic} ${LVL[b.bot].n}</span></span>${host?`<button class="sec sm" onclick="hostBots.splice(${k},1);peersChanged()">✕</button>`:''}</div>`).join('')}
+  ${host&&ps.length+hostBots.length<8?`<div class="row" style="margin-top:6px"><select id="botlvl" style="flex:0 0 120px"><option value="1">🟢 سهل</option><option value="2" selected>🟡 متوسط</option><option value="3">🔴 صعب</option></select><button class="sec sm" onclick="hostBots.push({name:BOTNAMES[(hostBots.length+3)%BOTNAMES.length],bot:+$('botlvl').value});peersChanged()">🤖 + أضف كمبيوتر</button></div>`:''}
+  ${host?(ps.length+hostBots.length<2?'<p class="muted">⏳ بانتظار انضمام أصدقائك…</p>':''):'<p class="muted">⏳ بانتظار أن يبدأ المضيف اللعبة…</p>'}</div>
+  ${host?`<div class="card"><h2>⚙️ القوانين</h2>${settingsForm(draftSettings,true,true)}</div><button class="grn" style="width:100%;margin-bottom:12px;font-size:18px;padding:15px" onclick="startHost()" ${ps.length+hostBots.length<2?'disabled':''}>🚀 ابدأ اللعبة (${ps.length+hostBots.length} لاعبين)</button>`:''}
   <button class="sec" style="width:100%" onclick="leaveRoom()">مغادرة</button></div>`}
-function startHost(){const ps=namedPeers().slice(0,8);if(ps.length<2)return toast('تحتاج لاعبين على الأقل');
+let hostBots=[];
+function startHost(){const ps=namedPeers().slice(0,8-hostBots.length);if(ps.length+hostBots.length<2)return toast('تحتاج لاعبين على الأقل');
   draftSettings=readSettings(draftSettings,true);store.set('mullak_settings',draftSettings);
-  const list=[...ps.filter(p=>p.presence.cid===myCid),...ps.filter(p=>p.presence.cid!==myCid)].map(p=>({name:String(p.presence.name).slice(0,14),cid:String(p.presence.cid)}));
-  S=newGame(list,draftSettings);S.gid=Math.random().toString(36).slice(2,9);S.hostCid=myCid;mySeat=S.players.findIndex(p=>p.cid===myCid);store.set('mullak_host',{S,CODE});go('game');broadcast()}
+  const list=[...ps.filter(p=>p.presence.cid===myCid),...ps.filter(p=>p.presence.cid!==myCid)].map(p=>({name:String(p.presence.name).slice(0,14),cid:String(p.presence.cid)})).concat(hostBots.map((b,k)=>({name:b.name,bot:b.bot,cid:'bot'+k})));
+  botMem.tried={};S=newGame(list,draftSettings);S.gid=Math.random().toString(36).slice(2,9);S.hostCid=myCid;mySeat=S.players.findIndex(p=>p.cid===myCid);store.set('mullak_host',{S,CODE});go('game');broadcast()}
 async function leaveRoom(){await leaveNet();GR=null;MODE=null;S=null;history.replaceState(null,'',location.pathname);go('home')}
 function handleRemote(d){if(!S||!d||typeof d!=='object'||!d.a)return;const seat=S.players.findIndex(p=>p.cid===d.cid);if(seat<0)return;
   const a={...d.a,by:seat};if(a.type==='settings'||a.type==='finish')return;const e=apply(S,a);if(!e)afterChange();else broadcast()}
@@ -903,9 +992,9 @@ function boardHTML(){const s=S;let h='';
    ${s.settings.fp!=='none'?`<div class="pot">🅿️ ${fmt(s.pot)}</div>`:''}<div class="bank">البنك: 🏠 ${s.settings.limited?s.bh:'∞'} · 🏨 ${s.settings.limited?s.bt:'∞'}</div></div>`;
   return h}
 
-function playersHTML(){return S.players.map((p,i)=>`<div class="pchip${i===S.cur&&S.winner===null?' cur':''}${p.out?' out':''}" data-i="${i}"><div class="av" style="background:${p.col}">${p.tok}</div><div><b>${esc(p.name)}</b>${i===mySeat?' <span class="pill">أنت</span>':''}<div class="cash">${fmt(p.cash)} ${p.jail?'🔒':''} ${p.cards.length?'🎫'+p.cards.length:''}</div></div></div>`).join('')}
+function playersHTML(){return S.players.map((p,i)=>`<div class="pchip${i===S.cur&&S.winner===null?' cur':''}${p.out?' out':''}" data-i="${i}"><div class="av" style="background:${p.col}">${p.tok}</div><div><b>${esc(p.name)}</b>${p.bot?` <span class="pill">🤖${LVL[p.bot].ic}</span>`:''}${i===mySeat?' <span class="pill">أنت</span>':''}<div class="cash">${fmt(p.cash)} ${p.jail?'🔒':''} ${p.cards.length?'🎫'+p.cards.length:''}</div></div></div>`).join('')}
 
-function who(p){return MODE==='local'?`📱 أعطِ الجوال لـ <b>${esc(S.players[p].name)}</b>`:(p===mySeat?'<b>دورك أنت</b>':`بانتظار <b>${esc(S.players[p].name)}</b>`)}
+function who(p){if(S.players[p]&&S.players[p].bot)return `🤖 <b>${esc(S.players[p].name)}</b> يفكر<span class="dots"></span>`;const humans=S.players.filter(q=>!q.bot&&!q.out).length;if(MODE==='local'&&humans<=1)return `<b>دورك</b>`;return MODE==='local'?`📱 أعطِ الجوال لـ <b>${esc(S.players[p].name)}</b>`:(p===mySeat?'<b>دورك أنت</b>':`بانتظار <b>${esc(S.players[p].name)}</b>`)}
 function statusHTML(){const s=S,ph=phase(s),A=actor(s),en=canAct(A)?'':'disabled';const pl=s.players[s.cur];let h='';
   if(ph==='over'){h=`<div class="big">🏆 الفائز: ${esc(s.players[s.winner].name)}</div>${s.final?s.players.map((p,i)=>`<div>${p.tok} ${esc(p.name)}: ${s.final[i]<0?'مفلس':fmt(s.final[i])}</div>`).join(''):''}
      <div class="actions" style="margin-top:10px"><button onclick="newAfter()">لعبة جديدة</button></div>`}
@@ -954,7 +1043,7 @@ function renderTradePop(){const el=$('tradepop');let t=S&&view==='game'?S.trade:
 function renderGame(){if(view!=='game'||!S)return;if(!disp||disp.length!==S.players.length)syncDisp();
   $('board').innerHTML=boardHTML();placeTokens();$('players').innerHTML=playersHTML();floatsFor();
   if(!animating){$('status').innerHTML=statusHTML();$('tradeb').innerHTML='';renderTradePop()}
-  if(MODE==='host'||MODE==='guest')renderOnline();if(modalKind==='manage')openManage(manageFor);else if(modalKind==='log')openLog()}
+  if(MODE==='host'||MODE==='guest')renderOnline();if(modalKind==='manage')openManage(manageFor);else if(modalKind==='log')openLog();if(!animating)scheduleBot()}
 
 function showCard(c){const cd=CARDS[c.deck][c.id];const el=$('cardpop');const ch=c.deck==='ch';
   el.innerHTML=`<div class="c" style="background:${ch?'linear-gradient(160deg,#ffe8cc,#ffc078)':'linear-gradient(160deg,#e3fafc,#99e9f2)'}"><div class="em">${ch?'❓':'🧰'}</div><h3>${ch?'فرصة':'الصندوق'}</h3><p>${esc(cd.x)}</p><div class="muted">سحبها ${esc(S.players[c.p].name)}</div><button style="margin-top:14px;width:100%" onclick="$('cardpop').classList.add('hidden')">حسناً</button></div>`;el.classList.remove('hidden')}
