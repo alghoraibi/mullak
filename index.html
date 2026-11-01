@@ -159,6 +159,33 @@ button.roll{font-size:21px;padding:16px;border-radius:18px;animation:pulse 1.6s 
 .twait{text-align:center;background:#fff3cd;border-radius:12px;padding:10px;font-weight:700;margin-top:10px}
 .twait .dots::after{content:'';animation:dots 1.4s steps(4) infinite}
 @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
+#tvad{position:fixed;inset:0;z-index:65;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle,#1b2a52cc,#02060fee);overflow:hidden;transition:opacity .4s}
+#tvad.out{opacity:0}
+#tvad .rays{position:absolute;width:220vmax;height:220vmax;background:repeating-conic-gradient(#f2b63222 0 10deg,transparent 10deg 20deg);animation:spin 14s linear infinite}
+#tvad .tv{position:relative;width:min(380px,90vw);background:linear-gradient(160deg,#6b4423,#3d2412);border-radius:26px;padding:16px 16px 34px;box-shadow:0 20px 60px #000,inset 0 2px 0 #ffffff33;animation:tvin .6s cubic-bezier(.2,1.4,.4,1)}
+@keyframes tvin{0%{transform:scale(.1) rotate(-20deg);opacity:0}100%{transform:none;opacity:1}}
+#tvad .knobs{position:absolute;bottom:9px;left:22px;display:flex;gap:10px}
+#tvad .knobs i{width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#ddd,#555)}
+#tvad .scr{position:relative;border-radius:18px;overflow:hidden;background:linear-gradient(180deg,#14306b,#0b1a3a);border:4px solid #111;min-height:260px;padding:14px 10px 40px;color:#fff;text-align:center;box-shadow:inset 0 0 40px #000a}
+#tvad .scr::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,#ffffff08 0 2px,transparent 2px 4px);pointer-events:none}
+#tvad .static{position:absolute;inset:0;z-index:3;background:repeating-radial-gradient(circle at 17% 32%,#fff 0 1px,#000 1px 3px),repeating-radial-gradient(circle at 73% 61%,#999 0 1px,transparent 1px 2px);animation:stat .7s steps(6) forwards}
+@keyframes stat{0%{opacity:1;transform:translate(0,0)}20%{transform:translate(-3px,2px)}40%{transform:translate(2px,-3px)}70%{opacity:.8}100%{opacity:0;visibility:hidden}}
+#tvad .live{position:absolute;top:8px;left:10px;font-size:11px;font-weight:800;background:#e03131;padding:1px 7px;border-radius:5px;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.35}}
+#tvad .ttl{font-size:26px;font-weight:800;color:#ffd43b;text-shadow:0 3px 0 #b57a0a;margin:6px 0 12px;animation:pulseT 1s ease-in-out infinite .7s}
+@keyframes pulseT{50%{transform:scale(1.08)}}
+#tvad .deal{display:flex;align-items:stretch;gap:6px;animation:dealin .7s .6s both}
+@keyframes dealin{from{opacity:0;transform:translateY(25px) scale(.8)}}
+#tvad .pp{flex:1;background:#ffffff14;border-radius:14px;padding:8px 6px}
+#tvad .pp .av{width:38px;height:38px;border-radius:50%;margin:0 auto 4px;display:flex;align-items:center;justify-content:center;font-size:20px;border:2px solid #fff}
+#tvad .its{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+#tvad .its span{background:#fff;color:#1b1b22;border-radius:8px;padding:3px 5px;font-size:12.5px;font-weight:700}
+#tvad .vs{align-self:center;font-size:26px;color:#ffd43b;animation:spin 2s linear infinite}
+#tvad .tick{position:absolute;bottom:0;left:0;right:0;background:#e03131;font-weight:800;font-size:13px;padding:5px 0;white-space:nowrap;overflow:hidden;direction:rtl}
+#tvad .tick div{display:inline-block;animation:tick 9s linear infinite}
+@keyframes tick{from{transform:translateX(-30%)}to{transform:translateX(60%)}}
+.tvtag{display:inline-block;background:#e03131;color:#fff;font-weight:800;font-size:12px;padding:2px 10px;border-radius:20px;margin-bottom:6px}
+.tvtag.priv{background:#495057}
 #fxcanvas{position:fixed;inset:0;pointer-events:none;z-index:70}
 .set{display:grid;grid-template-columns:1fr auto;gap:9px 10px;align-items:center;font-size:14px}
 .set label{line-height:1.35}
@@ -387,11 +414,10 @@ function drawCard(s,p,deck){
 }
 function startAuction(s,pos){
   const n=s.players.length;const act=range(n).map(k=>(s.cur+k)%n).filter(i=>!s.players[i].out);
-  s.auc={pos,hi:0,ld:-1,act,t:0};log(s,`🔨 مزاد على ${SP[pos].n}`);
+  s.auc={pos,hi:0,ld:-1,act,t:0,ps:[]};log(s,`🔨 مزاد على ${SP[pos].n}`);
 }
-function aucNext(s,from){const a=s.auc;const L=a.act.length;
-  if(L===0||(L===1&&a.act[0]===a.ld))return aucEnd(s);
-  for(let k=0;k<L;k++){const i=(from+k)%L;if(a.act[i]!==a.ld){a.t=i;return}}
+function aucNext(s,from){const a=s.auc;const L=a.act.length;a.ps=a.ps||[];
+  for(let k=0;k<L;k++){const i=((from%L)+k+L)%L;const p=a.act[i];if(p!==a.ld&&!a.ps.includes(p)){a.t=i;return}}
   aucEnd(s);
 }
 function aucEnd(s){const a=s.auc;s.auc=null;
@@ -415,7 +441,7 @@ function doBankrupt(s,p,to){
   pl.cash=0;pl.cards=[];pl.out=true;pl.jail=false;
   s.debts=s.debts.filter(d=>d.p!==p);s.debts.forEach(d=>{if(d.to===p)d.to=-1});
   s.intq=s.intq.filter(q=>q.p!==p);
-  if(s.auc){const a=s.auc;const ix=a.act.indexOf(p);if(a.ld===p){a.ld=-1;a.hi=0}if(ix>=0){a.act.splice(ix,1);if(a.t>ix)a.t--;aucNext(s,a.t%Math.max(1,a.act.length))}}
+  if(s.auc){const a=s.auc;const ix=a.act.indexOf(p);if(a.ld===p){a.ld=-1;a.hi=0}a.ps=(a.ps||[]).filter(x=>x!==p);if(ix>=0){a.act.splice(ix,1);if(a.t>ix)a.t--;if(a.act.length)aucNext(s,a.t);else aucEnd(s)}}
   if(s.trade&&(s.trade.from===p||s.trade.to===p))s.trade=null;
   if(s.cur===p){s.buy=null;s.stage='post';s.extra=false}
 }
@@ -460,9 +486,9 @@ const H={
   decline(s,by){if(phase(s)!=='buy'||by!==s.cur)return 'غير متاح';const i=s.buy;s.buy=null;log(s,`${s.players[by].name} رفض شراء ${SP[i].n}`);if(s.settings.auction)startAuction(s,i)},
   bid(s,by,a){if(phase(s)!=='auc'||by!==actor(s))return 'ليس دورك في المزاد';const amt=Math.floor(+a.amt);const au=s.auc;
     if(!(amt>au.hi))return 'يجب أن يكون العرض أعلى من '+fmt(au.hi);if(amt<s.settings.aucMin)return 'أقل عرض '+fmt(s.settings.aucMin);if(amt>s.players[by].cash)return 'لا تملك هذا المبلغ نقداً';
-    fx(s,{k:'bid',p:by});au.hi=amt;au.ld=by;log(s,`🔨 ${s.players[by].name} عرض ${fmt(amt)}`);aucNext(s,(au.t+1)%au.act.length)},
-  pass(s,by){if(phase(s)!=='auc'||by!==actor(s))return 'ليس دورك في المزاد';const au=s.auc;const ix=au.t;au.act.splice(ix,1);log(s,`${s.players[by].name} انسحب من المزاد`);
-    aucNext(s,au.act.length?ix%au.act.length:0)},
+    fx(s,{k:'bid',p:by});au.hi=amt;au.ld=by;au.ps=[];log(s,`🔨 ${s.players[by].name} عرض ${fmt(amt)}`);aucNext(s,(au.t+1)%au.act.length)},
+  pass(s,by){if(phase(s)!=='auc'||by!==actor(s))return 'ليس دورك في المزاد';const au=s.auc;au.ps=au.ps||[];au.ps.push(by);log(s,`${s.players[by].name} مرّر في المزاد`);
+    aucNext(s,au.t+1)},
   endTurn(s,by){if(phase(s)!=='post'||by!==s.cur)return 'لا يمكنك إنهاء الدور الآن';nextTurn(s)},
   build(s,by,a){const i=a.pos,sp=SP[i],pr=s.props[i],st=s.settings;
     if(sp.t!=='st'||pr.o!==by)return 'ليس عقارك';if(!ownsGroup(s,by,sp.g))return 'يجب امتلاك المجموعة اللونية كاملة';
@@ -492,7 +518,8 @@ const H={
     if(!(to>=0&&to<s.players.length)||to===by||s.players[to].out||s.players[by].out)return 'لاعب غير صحيح';
     const e=validTradeSide(s,by,t.gc,t.gp,t.gk)||validTradeSide(s,to,t.rc,t.rp,t.rk);if(e)return e;
     if(!t.gc&&!t.gp.length&&!t.gk.length&&!t.rc&&!t.rp.length&&!t.rk.length)return 'العرض فارغ';
-    fx(s,{k:'offer'});s.trade={from:by,to,gc:t.gc,gp:t.gp,gk:t.gk,rc:t.rc,rp:t.rp,rk:t.rk};log(s,`🤝 ${s.players[by].name} أرسل عرضاً إلى ${s.players[to].name}`)},
+    const pub=!!t.pub;fx(s,{k:pub?'ad':'offer'});s.trade={from:by,to,gc:t.gc,gp:t.gp,gk:t.gk,rc:t.rc,rp:t.rp,rk:t.rk,pub};log(s,`🤝 ${s.players[by].name} أرسل عرضاً إلى ${s.players[to].name}`)},
+  tradePublic(s,by){const t=s.trade;if(!t||t.from!==by)return 'غير متاح';if(t.pub)return 'العرض معلن بالفعل';t.pub=true;fx(s,{k:'ad'});log(s,`📺 ${s.players[by].name} أعلن صفقته للجميع`)},
   tradeAccept(s,by){const t=s.trade;if(!t||t.to!==by)return 'غير متاح';if(s.auc)return 'انتظر انتهاء المزاد';
     const e=validTradeSide(s,t.from,t.gc,t.gp,t.gk)||validTradeSide(s,t.to,t.rc,t.rp,t.rk);if(e){s.trade=null;return e+' — أُلغي العرض'}
     const A=s.players[t.from],B=s.players[t.to];A.cash+=t.rc-t.gc;B.cash+=t.gc-t.rc;
@@ -555,6 +582,7 @@ const sfx={
   mort(){tone(300,0,.15,'square',.05);tone(450,.12,.2,'square',.05)},
   deal(){tone(880,0,.12,'sine',.14);tone(1175,.1,.25,'sine',.14)},
   offer(){[659,880,659,880].forEach((f,i)=>tone(f,i*.11,.12,'triangle',.12))},
+  ad(){noise(0,.45,.25,3000,.4);[523,659,784,1047,1319].forEach((f,i)=>tone(f,.45+i*.09,.18,'square',.07));[784,1047].forEach((f,i)=>tone(f,1.05+i*.16,.35,'triangle',.12));noise(1.6,.6,.05,7000,1)},
   reject(){tone(330,0,.18,'square',.07);tone(247,.16,.3,'square',.07)},
   turn(){tone(988,0,.07,'sine',.07);tone(1319,.07,.12,'sine',.07)},
   debt(){tone(220,0,.35,'sawtooth',.06,180)},
@@ -608,6 +636,7 @@ async function playFx(fxs){
       case 'mort':sfx.mort();break;
       case 'deal':sfx.deal();buzz(40);banner('🤝 تمت الصفقة!','#8ce99a');confetti(60);break;
       case 'offer':sfx.offer();buzz([60,40,60]);break;
+      case 'ad':await tvAd();break;
       case 'reject':sfx.reject();banner('❌ رُفضت الصفقة','#ff8787');break;
       case 'debt':sfx.debt();break;
       case 'pot':sfx.coin();banner('🅿️ رصيد الموقف!','#ffd43b');confetti(40);break;
@@ -649,6 +678,16 @@ function setDie(el,n,anim){const[x,y]=SHOW[n];if(anim){spins++;const ex=(spins%2
 async function rollDice(d){const a=$('dA'),b=$('dB');if(!a)return;setDie(a,d[0],true);await sleep(70);setDie(b,d[1],true);await sleep(1000)}
 /* مؤثرات */
 function banner(txt,col,small){const w=document.querySelector('.bwrap');if(!w)return;const b=document.createElement('div');b.className='banner';b.textContent=txt;b.style.color=col||'#fff';if(small)b.style.fontSize='clamp(30px,10vw,50px)';w.appendChild(b);setTimeout(()=>b.remove(),1600)}
+async function tvAd(){const t=S.trade;if(!t)return;sfx.ad();buzz([40,30,40,30,80]);const A=S.players[t.from],B=S.players[t.to];
+  const side=(c,ps,ks)=>{const a=[];if(c)a.push('💵 '+fmt(c));ps.forEach(i=>a.push((SP[i].ic||'🏘️')+' '+SP[i].n));ks.forEach(()=>a.push('🎫 خروج من السجن'));return a.length?a.map(x=>`<span>${esc(x)}</span>`).join(''):'<span>لا شيء</span>'};
+  const tick=`🔴 عاجل • صفقة القرن • ${esc(A.name)} يعرض على ${esc(B.name)} • هل يقبل؟ • `;
+  const el=document.createElement('div');el.id='tvad';el.innerHTML=`<div class="rays"></div><div class="tv"><div class="scr"><div class="static"></div>
+   <div class="live">● LIVE</div><div class="ttl">📺 إعلان عاجل!</div>
+   <div class="deal"><div class="pp"><div class="av" style="background:${A.col}">${A.tok}</div><b>${esc(A.name)}</b><div class="its">${side(t.gc,t.gp,t.gk)}</div></div>
+   <div class="vs">⇄</div><div class="pp"><div class="av" style="background:${B.col}">${B.tok}</div><b>${esc(B.name)}</b><div class="its">${side(t.rc,t.rp,t.rk)}</div></div></div>
+   <div class="tick"><div>${tick.repeat(4)}</div></div></div><div class="knobs"><i></i><i></i></div></div>`;
+  document.body.appendChild(el);el.addEventListener('click',()=>el.classList.add('out'));
+  confetti(50);await sleep(3600);el.classList.add('out');await sleep(450);el.remove()}
 function shake(){const w=document.querySelector('.bwrap');if(!w)return;w.classList.remove('shake');void w.offsetWidth;w.classList.add('shake')}
 function stampCell(i){const c=document.querySelector(`.cell[data-i="${i}"]`);if(c){c.classList.remove('stamp');void c.offsetWidth;c.classList.add('stamp')}}
 function floatsFor(){if(!S)return;const now=S.players.map(p=>p.cash);if(lastCash&&lastCash.length===now.length){now.forEach((v,i)=>{const d=v-lastCash[i];if(!d)return;const chip=document.querySelector(`.pchip[data-i="${i}"]`);if(!chip)return;
@@ -869,7 +908,7 @@ function who(p){return MODE==='local'?`📱 أعطِ الجوال لـ <b>${esc(
 function statusHTML(){const s=S,ph=phase(s),A=actor(s),en=canAct(A)?'':'disabled';const pl=s.players[s.cur];let h='';
   if(ph==='over'){h=`<div class="big">🏆 الفائز: ${esc(s.players[s.winner].name)}</div>${s.final?s.players.map((p,i)=>`<div>${p.tok} ${esc(p.name)}: ${s.final[i]<0?'مفلس':fmt(s.final[i])}</div>`).join(''):''}
      <div class="actions" style="margin-top:10px"><button onclick="newAfter()">لعبة جديدة</button></div>`}
-  else if(ph==='trade'){h=`<div class="big">⏸️ اللعب متوقف</div><p class="muted">بانتظار الرد على عرض الصفقة بين ${esc(s.players[s.trade.from].name)} و${esc(s.players[s.trade.to].name)}</p>`}
+  else if(ph==='trade'){h=`<div class="big">⏸️ اللعب متوقف</div><p class="muted">${s.trade.pub?'📺 صفقة معلنة':'🤫 صفقة خاصة'} بين ${esc(s.players[s.trade.from].name)} و${esc(s.players[s.trade.to].name)} — بانتظار الرد…</p>`}
   else if(ph==='debt'){const d=s.debts[0],dp=s.players[d.p];
     h=`<div class="who">${who(d.p)}</div><div class="big">⚠️ ${esc(dp.name)} مدين بـ ${fmt(d.amt)} لـ${esc(pn(s,d.to))}</div><p class="muted">السبب: ${esc(d.reason)} · رصيده ${fmt(dp.cash)} · يمكنه بيع المباني أو الرهن من "ممتلكاتي" أو عقد صفقة.</p>
      <div class="actions"><button class="grn" ${en} onclick="act('payDebt')" ${dp.cash<d.amt?'disabled':''}>سدّد ${fmt(d.amt)}</button><button class="sec" ${en} onclick="openManage(${d.p})">🏠 جمع المال</button>
@@ -879,9 +918,9 @@ function statusHTML(){const s=S,ph=phase(s),A=actor(s),en=canAct(A)?'':'disabled
      <div class="actions"><button class="grn" ${en} ${qp.cash<unmCost(s,q.pos)?'disabled':''} onclick="act('intUnm')">فك الرهن (${fmt(unmCost(s,q.pos))})</button><button ${en} onclick="act('intKeep')">ادفع الفائدة فقط (${fmt(intCost(s,q.pos))})</button></div>`}
   else if(ph==='auc'){const a=s.auc,bp=s.players[A];const min=Math.max(a.hi+1,s.settings.aucMin);
     h=`<div class="who">${who(A)}</div><div class="big">🔨 مزاد: ${esc(SP[a.pos].n)} <span class="muted">(السعر ${fmt(SP[a.pos].p)})</span></div>
-     <p>أعلى عرض: <b>${a.ld<0?'لا يوجد':fmt(a.hi)+' — '+esc(s.players[a.ld].name)}</b><br><span class="muted">المشاركون: ${a.act.map(i=>esc(s.players[i].name)).join('، ')} · رصيد ${esc(bp.name)}: ${fmt(bp.cash)}</span></p>
+     <p>أعلى عرض: <b>${a.ld<0?'لا يوجد':fmt(a.hi)+' — '+esc(s.players[a.ld].name)}</b><br><span class="muted">${a.act.map(i=>i===a.ld?'👑 '+esc(s.players[i].name):(a.ps||[]).includes(i)?'<s>'+esc(s.players[i].name)+'</s>':esc(s.players[i].name)).join('، ')} · رصيد ${esc(bp.name)}: ${fmt(bp.cash)}</span><br><span class="muted" style="font-size:12px">اللي يمرّر يقدر يرجع يزايد إذا أحد رفع السعر بعده. المزاد ينتهي لما الكل يمرّر.</span></p>
      <div class="actions">${[0,10,50,100].map(k=>{const v=k?Math.max(a.hi+k,s.settings.aucMin):min;return `<button ${en} ${v>bp.cash?'disabled':''} onclick="act('bid',{amt:${v}})">${fmt(v)}</button>`}).join('')}</div>
-     <div class="row" style="margin-top:8px"><input type="number" id="bidv" placeholder="مبلغ آخر" min="${min}" ${en}><button ${en} style="flex:0 0 auto" onclick="act('bid',{amt:+$('bidv').value})">زايد</button><button class="sec" ${en} style="flex:0 0 auto" onclick="act('pass')">انسحاب</button></div>`}
+     <div class="row" style="margin-top:8px"><input type="number" id="bidv" placeholder="مبلغ آخر" min="${min}" ${en}><button ${en} style="flex:0 0 auto" onclick="act('bid',{amt:+$('bidv').value})">زايد</button><button class="sec" ${en} style="flex:0 0 auto" onclick="act('pass')">تمرير</button></div>`}
   else if(ph==='buy'){const i=s.buy;
     h=`<div class="who">${who(s.cur)}</div><div class="minideed"><div class="c" style="background:${SP[i].g?GROUPS[SP[i].g].c:'#555'}"></div><div class="t"><b>${SP[i].ic||'🏘️'} ${esc(SP[i].n)}</b><br>السعر ${fmt(SP[i].p)} · الإيجار ${SP[i].t==='st'?fmt(SP[i].r[0])+' ← حتى '+fmt(SP[i].r[5]):SP[i].t==='rr'?'25 ← 200':'4×/10× النرد'}</div></div><div class="big">تبي تشتريه؟</div><p class="muted">رصيدك ${fmt(pl.cash)}. إذا رفضت يُطرح في مزاد${s.settings.auction?' إلزامي ويحق لك المشاركة':''}.</p>
      <div class="actions"><button class="grn" ${en} ${pl.cash<SP[i].p?'disabled':''} onclick="act('buy')">اشترِ</button><button class="sec" ${en} onclick="act('decline')">${s.settings.auction?'رفض ← مزاد':'رفض'}</button><button class="sec" onclick="showDeed(${i})">بطاقة الملكية</button></div>`}
@@ -895,14 +934,15 @@ function lastLine(){for(let k=S.log.length-1;k>=0;k--){const l=S.log[k];if(!l.st
 function tItems(c,ps,ks){const a=[];if(c)a.push(`<span class="titem cash">💵 ${fmt(c)}</span>`);
   ps.forEach(i=>{const sp=SP[i];a.push(`<span class="titem" style="border-right-color:${sp.g?GROUPS[sp.g].c:'#555'}" onclick="showDeed(${i})">${sp.ic||'🏘️'} ${esc(sp.n)}${S.props[i].m?' 🏦':''}</span>`)});
   ks.forEach(d=>a.push(`<span class="titem">🎫 خروج من السجن</span>`));return a.join('')||'<span class="titem none">لا شيء</span>'}
-function renderTradePop(){const el=$('tradepop');const t=S&&view==='game'?S.trade:null;if(!t){el.classList.add('hidden');el.dataset.k='';return}
+function renderTradePop(){const el=$('tradepop');let t=S&&view==='game'?S.trade:null;if(t&&!t.pub&&MODE!=='local'&&!canAct(t.to)&&!canAct(t.from))t=null;if(!t){el.classList.add('hidden');el.dataset.k='';return}
   const A=S.players[t.from],B=S.players[t.to];const key=JSON.stringify(t);if(el.dataset.k===key&&!el.classList.contains('hidden'))return;el.dataset.k=key;
   const mt=t.gp.some(i=>S.props[i].m)||t.rp.some(i=>S.props[i].m);
   let btns='';
   if(canAct(t.to))btns+=`<div class="actions" style="margin-top:12px"><button class="grn" onclick="act('tradeAccept',{},${t.to})">✅ ${MODE==='local'?esc(B.name)+' يقبل':'أقبل'}</button><button class="red" onclick="act('tradeReject',{},${t.to})">❌ ${MODE==='local'?esc(B.name)+' يرفض':'أرفض'}</button></div>`;
+  if(canAct(t.from)&&!t.pub)btns+=`<button style="width:100%;margin-top:9px" onclick="act('tradePublic',{},${t.from})">📺 أعلن الصفقة للجميع</button>`;
   if(canAct(t.from))btns+=`<button class="sec" style="width:100%;margin-top:9px" onclick="act('tradeCancel',{},${t.from})">↩️ ${MODE==='local'?'إلغاء العرض ('+esc(A.name)+')':'سحب العرض'}</button>`;
   const wait=MODE==='local'?`📱 أعطِ الجوال لـ <b>${esc(B.name)}</b> ليقرر`:(canAct(t.to)?'':`⏳ بانتظار رد <b>${esc(B.name)}</b><span class="dots"></span>`);
-  el.innerHTML=`<div class="box"><h2>🤝 عرض صفقة</h2><div class="sub">اللعب متوقف حتى يتم القبول أو الرفض</div>
+  el.innerHTML=`<div class="box">${t.pub?'<div class="tvtag">📺 إعلان عام</div>':'<div class="tvtag priv">🤫 عرض خاص</div>'}<h2>🤝 عرض صفقة</h2><div class="sub">اللعب متوقف حتى يتم القبول أو الرفض</div>
    <div class="tside"><div class="hd"><span class="av" style="background:${A.col}">${A.tok}</span>${esc(A.name)} يعطي</div><div class="titems">${tItems(t.gc,t.gp,t.gk)}</div></div>
    <div class="tswap">🔄</div>
    <div class="tside"><div class="hd"><span class="av" style="background:${B.col}">${B.tok}</span>${esc(B.name)} يعطي</div><div class="titems">${tItems(t.rc,t.rp,t.rk)}</div></div>
@@ -962,9 +1002,10 @@ function tradeUI(from,to){const s=S;const A=s.players[from],B=s.players[to];
    <div class="tradecol"><b>${esc(A.name)} يعطي:</b>${list(from,'gp')}${cards(from,'gk')}<label>نقداً <input type="number" id="t_gc" min="0" max="${A.cash}" value="0" style="width:110px"></label></div>
    <div class="tradecol"><b>${esc(B.name)} يعطي:</b>${list(to,'rp')}${cards(to,'rk')}<label>نقداً <input type="number" id="t_rc" min="0" max="${B.cash}" value="0" style="width:110px"></label></div>
    <p class="muted">لا يُسمح بالإقراض أو الإعفاء من الإيجار. العقار الذي في مجموعته مبانٍ لا يُتداول. المرهون ينتقل مع فائدة ${s.settings.mi}%.</p>
-   <button class="grn" style="width:100%" onclick="sendTrade(${from},${to})">إرسال العرض</button>`)}
-function sendTrade(from,to){const q=k=>[...document.querySelectorAll(`#sheet input[data-k=${k}]:checked`)].map(x=>x.value);
-  const t={to,gc:Math.floor(+$('t_gc').value||0),rc:Math.floor(+$('t_rc').value||0),gp:q('gp').map(Number),rp:q('rp').map(Number),gk:q('gk'),rk:q('rk')};
+   <div class="actions"><button class="grn" onclick="sendTrade(${from},${to},false)">🤫 إرسال خاص</button><button onclick="sendTrade(${from},${to},true)">📺 إعلان للجميع</button></div>
+   <p class="muted" style="margin-top:8px">الخاص يوصل للاعب بس. الإعلان يطلع عند كل اللاعبين كأنه إعلان تلفزيون.</p>`)}
+function sendTrade(from,to,pub){const q=k=>[...document.querySelectorAll(`#sheet input[data-k=${k}]:checked`)].map(x=>x.value);
+  const t={to,gc:Math.floor(+$('t_gc').value||0),rc:Math.floor(+$('t_rc').value||0),gp:q('gp').map(Number),rp:q('rp').map(Number),gk:q('gk'),rk:q('rk'),pub:!!pub};
   closeModal();act('tradePropose',{t},from)}
 
 function openLog(){openModal('log',`<h2>📜 سجل اللعب</h2><div class="log">${S.log.slice().reverse().map(l=>`<div>${esc(l)}</div>`).join('')}</div>`)}
